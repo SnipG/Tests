@@ -1,0 +1,526 @@
+<html>
+<body>
+<div id="divGlobals"></div>
+<script type="text/javascript">
+ 
+// main
+ 
+function main()
+{
+    var worldSizeInPixels = new Coords(100, 100, 1);
+ 
+    var world = new World
+    (
+        worldSizeInPixels,
+        // movers
+        [
+            new MoverListener
+            (
+                worldSizeInPixels.clone().divideScalar(2) // pos
+            ),
+ 
+            new MoverNoisy
+            (
+                new Sound("Test.wav"),
+                new Coords(0, 0, 0), // pos
+                new Coords(1, .5, 0) // vel
+            ),
+        ]
+    );
+ 
+    Globals.Instance.initialize
+    (
+        5, // pixelsPerSoundUnit
+        world
+    );
+}
+ 
+// classes
+ 
+function Coords(x, y, z)
+{
+    this.x = x;
+    this.y = y;
+    this.z = z;
+}
+{
+    Coords.prototype.add = function(other)
+    {
+        this.x += other.x;
+        this.y += other.y;
+        this.z += other.z;
+        return this;
+    }
+     
+    Coords.prototype.clone = function()
+    {
+        return new Coords(this.x, this.y, this.z);
+    }
+ 
+    Coords.prototype.divideScalar = function(scalar)
+    {
+        this.x /= scalar;
+        this.y /= scalar;
+        this.z /= scalar;
+        return this;
+    }
+ 
+    Coords.prototype.dotProduct = function(other)
+    {
+        return this.x * other.x + this.y * other.y + this.z * other.z;
+    }
+ 
+    Coords.prototype.isInRange = function(range)
+    {
+        var returnValue = 
+        (
+            this.x >= 0
+            && this.x <= range.x
+            && this.y >= 0
+            && this.y <= range.y
+            && this.z >= 0
+            && this.z <= range.z
+        );
+ 
+        return returnValue;
+    }
+ 
+    Coords.prototype.magnitude = function()
+    {
+        return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+    }
+ 
+    Coords.prototype.multiplyScalar = function(scalar)
+    {
+        this.x *= scalar;
+        this.y *= scalar;
+        this.z *= scalar;
+        return this;
+    }
+ 
+    Coords.prototype.right = function()
+    {
+        var temp = this.y;
+        this.y = this.x;
+        this.x = 0 - temp;
+        return this;
+    }
+ 
+    Coords.prototype.normalize = function()
+    {
+        return this.divideScalar(this.magnitude());
+    }
+ 
+    Coords.prototype.overwriteWith = function(other)
+    {
+        this.x = other.x;
+        this.y = other.y;
+        this.z = other.z;
+        return this;
+    }
+ 
+    Coords.prototype.subtract = function(other)
+    {
+        this.x -= other.x;
+        this.y -= other.y;
+        this.z -= other.z;
+        return this;
+    }
+}
+ 
+function DisplayHelper()
+{
+    // do nothing
+}
+{
+    // constants
+ 
+    DisplayHelper.ColorFore = "LightGray";
+    DisplayHelper.ColorBack = "White";
+    DisplayHelper.MoverSize = new Coords(10, 10, 1);
+ 
+    // methods
+ 
+    DisplayHelper.prototype.clear = function()
+    {
+        this.graphics.fillStyle = DisplayHelper.ColorBack;
+        this.graphics.fillRect
+        (
+            0, 0, this.viewSizeInPixels.x, this.viewSizeInPixels.y
+        );
+ 
+        this.graphics.strokeStyle = DisplayHelper.ColorFore;
+        this.graphics.strokeRect
+        (
+            0, 0, this.viewSizeInPixels.x, this.viewSizeInPixels.y
+        );
+    }
+ 
+    DisplayHelper.prototype.drawMover = function(mover)
+    {
+        var moverPos = mover.pos;
+        var moverSize = DisplayHelper.MoverSize;
+        var moverSizeHalf = moverSize.clone().divideScalar(2);
+        var drawPos = moverPos.clone();
+ 
+        this.graphics.beginPath();
+        this.graphics.moveTo(drawPos.x, drawPos.y);
+        var moverForward = mover.orientation.forward;
+        drawPos.add(moverForward.clone().multiplyScalar(moverSize.x));
+        this.graphics.lineTo(drawPos.x, drawPos.y);
+        this.graphics.stroke();
+ 
+        drawPos.overwriteWith(moverPos).subtract(moverSizeHalf);
+        this.graphics.strokeRect
+        (
+            drawPos.x, 
+            drawPos.y,
+            moverSize.x, 
+            moverSize.y
+        );
+ 
+ 
+    }
+ 
+    DisplayHelper.prototype.drawWorld = function(world)
+    {
+        this.clear();
+ 
+        var listenerPos = world.movers[0].pos;
+        this.graphics.strokeRect
+        (
+            listenerPos.x, listenerPos.y,
+            1, 1
+        );
+        this.graphics.beginPath();
+        this.graphics.arc
+        (
+            listenerPos.x, listenerPos.y,
+            Globals.Instance.soundEnvironment.pixelsPerSoundUnit * 2,
+            0, 2 * Math.PI  
+        )
+        this.graphics.stroke();
+ 
+ 
+        var movers = world.movers;
+        for (var i = 0; i < movers.length; i++)
+        {
+            var mover = movers[i];
+            this.drawMover(mover);
+        }
+    }
+ 
+    DisplayHelper.prototype.initialize = function(viewSizeInPixels)
+    {
+        this.viewSizeInPixels = viewSizeInPixels;
+ 
+        var canvas = document.createElement("canvas");
+        canvas.width = this.viewSizeInPixels.x;
+        canvas.height = this.viewSizeInPixels.y;
+        Globals.Instance.divGlobals.appendChild(canvas);
+ 
+        this.graphics = canvas.getContext("2d");
+    }
+}
+ 
+function Globals()
+{
+    // do nothing
+}
+{
+    // instance
+ 
+    Globals.Instance = new Globals();
+ 
+    // methods
+ 
+    Globals.prototype.initialize = function(pixelsPerSoundUnit, world)
+    {   
+        this.divGlobals = document.getElementById("divGlobals");
+ 
+        this.displayHelper = new DisplayHelper();
+        this.displayHelper.initialize(world.sizeInPixels);
+ 
+        this.soundEnvironment = new SoundEnvironment();
+        this.soundEnvironment.initialize(pixelsPerSoundUnit);
+ 
+        this.world = world;
+        this.world.initialize();
+ 
+        this.timer = setInterval
+        (
+            this.handleEventTimerTick.bind(this),
+            100 // millisecondsPerTimerTick
+        );
+ 
+        this.inputHelper = new InputHelper();
+        this.inputHelper.initialize();
+    }
+ 
+    Globals.prototype.handleEventTimerTick = function()
+    {
+        this.world.updateForTimerTick();
+    }
+}
+ 
+function InputHelper()
+{
+    // do nothing
+}
+{
+    InputHelper.prototype.initialize = function()
+    {
+        document.body.onkeydown = this.handleEventKeyDown.bind(this);
+        document.body.onkeyup = this.handleEventKeyUp.bind(this);
+    }
+ 
+    // events
+ 
+    InputHelper.prototype.handleEventKeyDown = function(event)
+    {
+        this.keyCodePressed = event.keyCode;
+    }
+ 
+    InputHelper.prototype.handleEventKeyUp = function(event)
+    {
+        this.keyCodePressed = null;
+    }
+ 
+}
+ 
+function MoverListener(pos)
+{
+    this.pos = pos;
+    this.orientation = new Orientation(new Coords(1, 0, 0));
+}
+{
+    MoverListener.prototype.initialize = function()
+    {
+        // do nothing
+    }
+ 
+    MoverListener.prototype.updateForTimerTick = function(world)
+    {
+        var keyCodePressed = Globals.Instance.inputHelper.keyCodePressed;
+        if (keyCodePressed == 65) // a
+        {
+            this.orientation.forward.subtract
+            (
+                this.orientation.right.multiplyScalar(.1)
+            ).normalize();
+            this.orientation.recalculate();
+        }
+        else if (keyCodePressed == 68) // d
+        {
+            this.orientation.forward.add
+            (
+                this.orientation.right.multiplyScalar(.1)
+            ).normalize();
+            this.orientation.recalculate();
+        }
+        else if (keyCodePressed == 83) // s
+        {
+            this.pos.subtract(this.orientation.forward);
+        }
+        else if (keyCodePressed == 87) // w
+        {
+            this.pos.add(this.orientation.forward);
+        }
+    }
+}
+ 
+ 
+function MoverNoisy(sound, pos, vel)
+{
+    this.sound = sound;
+    this.pos = pos;
+    this.vel = vel;
+    this.orientation = new Orientation(this.vel);
+}
+{
+    MoverNoisy.prototype.initialize = function()
+    {
+        this.soundEmitter = new SoundEmitter(this.sound, this.pos);
+        Globals.Instance.soundEnvironment.soundEmitterAdd(this.soundEmitter);
+    }
+ 
+    MoverNoisy.prototype.updateForTimerTick = function(world)
+    {
+        this.pos.add(this.vel);
+        if (this.pos.isInRange(world.sizeInPixels) == false)
+        {
+            this.vel.right();
+            this.pos.add(this.vel);
+        }
+        this.soundEmitter.updateForTimerTick();
+    }
+}
+ 
+function Orientation(forward)
+{
+    this.forward = forward;
+    this.right = this.forward.clone().right();
+    this.down = new Coords(0, 0, 1);
+    this.up = this.down.clone().multiplyScalar(-1);
+}
+{
+    Orientation.prototype.recalculate = function()
+    {
+        this.right.overwriteWith(this.forward).right();
+    }
+}
+ 
+function Sound(filePath)
+{
+    this.filePath = filePath;
+}
+ 
+function SoundEmitter(sound, pos)
+{
+    this.sound = sound;
+    this.pos = pos;
+}
+{
+    SoundEmitter.prototype.initializeForSoundEnvironment = function(soundEnvironment)
+    {
+        // Adapted from example code found at the URL
+        // http://www.html5rocks.com/en/tutorials/webaudio/positional_audio/
+     
+        var audioContext = soundEnvironment.audioContext;
+        var volume = audioContext.createGain();
+ 
+        var source = audioContext.createBufferSource();
+        source.loop = true;
+ 
+        var panner = audioContext.createPanner();
+ 
+        source.connect(volume);
+        volume.connect(panner);
+        panner.connect(soundEnvironment.mainVolume);
+ 
+        var systemSound = {};
+        systemSound.volume = volume;
+        systemSound.source = source;
+        systemSound.panner = panner;
+        this.systemSound = systemSound;
+ 
+        var request = new XMLHttpRequest();
+        request.open("GET", this.sound.filePath, true);
+        request.responseType = "arraybuffer";
+        request.onload = function(e) 
+        {
+            audioContext.decodeAudioData
+            (
+                this.response, 
+                function onSuccess(buffer) 
+                {
+                    systemSound.buffer = buffer;
+                    systemSound.source.buffer = systemSound.buffer;
+                    systemSound.source.start(audioContext.currentTime);
+                }, 
+                function onFailure() 
+                {
+                    alert("Decoding the audio buffer failed");
+                }
+            );
+        };
+     
+        request.send();
+ 
+        // hack
+ 
+        this.posRelativeToListener = this.pos.clone().subtract
+        (
+            soundEnvironment.listener.pos
+        );
+    }
+ 
+    SoundEmitter.prototype.updateForTimerTick = function()
+    {
+        var soundEnvironment = Globals.Instance.soundEnvironment;
+ 
+        var listener = soundEnvironment.listener;
+ 
+        this.posRelativeToListener.overwriteWith
+        (
+            this.pos
+        ).subtract
+        (
+            listener.pos
+        ).divideScalar
+        (
+            soundEnvironment.pixelsPerSoundUnit
+        );
+ 
+        var listenerOrientation = listener.orientation;
+ 
+        this.systemSound.panner.setPosition
+        (
+            this.posRelativeToListener.dotProduct(listenerOrientation.right),
+            this.posRelativeToListener.dotProduct(listenerOrientation.forward),         
+            this.posRelativeToListener.dotProduct(listenerOrientation.up)
+        );
+    }
+}
+ 
+function SoundEnvironment()
+{
+    this.soundEmitters = [];
+}
+{
+    SoundEnvironment.prototype.initialize = function(pixelsPerSoundUnit)
+    {
+        this.pixelsPerSoundUnit = pixelsPerSoundUnit;
+        this.audioContext = new AudioContext();
+        this.mainVolume = this.audioContext.createGain();
+        this.mainVolume.connect(this.audioContext.destination);
+    }
+ 
+    SoundEnvironment.prototype.listenerSet = function(value)
+    {
+        this.listener = value;
+    }
+ 
+    SoundEnvironment.prototype.soundEmitterAdd = function(soundEmitter)
+    {
+        this.soundEmitters.push(soundEmitter);
+        soundEmitter.initializeForSoundEnvironment(this);
+    }
+}
+ 
+function World(sizeInPixels, movers)
+{
+    this.sizeInPixels = sizeInPixels;
+    this.movers = movers;
+}
+{
+    World.prototype.initialize = function()
+    {
+        Globals.Instance.soundEnvironment.listenerSet(this.movers[0]);
+ 
+        for (var i = 0; i < this.movers.length; i++)
+        {
+            var mover = this.movers[i];
+            mover.initialize();
+        }
+    }
+ 
+    World.prototype.updateForTimerTick = function()
+    {
+        for (var i = 0; i < this.movers.length; i++)
+        {
+            var mover = this.movers[i];
+            mover.updateForTimerTick(this);
+        }
+ 
+        Globals.Instance.displayHelper.drawWorld(this);
+    }
+}
+ 
+// run
+ 
+main();
+     
+</script>
+</body>
+</html>
